@@ -1,5 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 
+import { GlyphRain } from './GlyphRain';
+
 interface LoadingScreenProps {
   progress: number;
   ready: boolean;
@@ -19,6 +21,7 @@ export function LoadingScreen({ progress, ready }: LoadingScreenProps) {
           role="status"
           aria-live="polite"
         >
+          <GlyphRain className="loading__rain" />
           <div className="loading__inner">
             <div className="loading__orbit" aria-hidden="true">
               <span className="loading__sun" />
@@ -37,6 +40,9 @@ export function LoadingScreen({ progress, ready }: LoadingScreenProps) {
               />
             </div>
             <p className="loading__pct">{Math.round(progress * 100)}%</p>
+            <p className="loading__credit">
+              <b>Preciado</b> Tech
+            </p>
           </div>
         </motion.div>
       )}

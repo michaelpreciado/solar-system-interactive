@@ -30,7 +30,7 @@ const SPRING = {
 
 export function Hud() {
   const focused = useUIStore((s) => s.focusedBody);
-  const accent = BODY_BY_ID[focused]?.accent ?? '#6ea8ff';
+  const accent = BODY_BY_ID[focused]?.accent ?? '#5ce1f2';
 
   // A single CSS variable drives every accent in the interface, so the whole
   // UI takes on the colour of whatever you're looking at.
