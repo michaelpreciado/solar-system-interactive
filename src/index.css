@@ -117,6 +117,9 @@ canvas {
   position: relative;
   width: 100%;
   height: 100%;
+  /* The film grain drifts up to 1% past the edges; without a clip it pushes
+     the document into a few px of horizontal scroll on narrow screens. */
+  overflow: hidden;
 }
 
 /* A restrained anamorphic treatment over the realtime render. The scene stays

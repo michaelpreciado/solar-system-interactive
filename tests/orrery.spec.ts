@@ -287,12 +287,12 @@ test.describe('Orrery', () => {
     // Keys go to the document; clicking the canvas first is unnecessary and
     // risks landing on a HUD control.
     for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowRight');
-    await page.waitForTimeout(600);
-    expect(await readDate()).not.toBe(before);
+    // Software GL renders ~2 fps in CI, so the readout can take several
+    // frames to catch up; poll instead of betting on a fixed delay.
+    await expect.poll(readDate).not.toBe(before);
 
     await page.click('button:has-text("Today")');
-    await page.waitForTimeout(600);
-    expect(await readDate()).toBe(before);
+    await expect.poll(readDate).toBe(before);
   });
 
   test('survives a resize mid-animation', async ({ page }) => {
