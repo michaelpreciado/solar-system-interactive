@@ -10,6 +10,9 @@ import { defineConfig, devices } from '@playwright/test';
  * Procedural surfaces are baked on the GPU at startup. Under SwiftShader that
  * takes tens of seconds, which is why the timeouts here are generous.
  */
+// E2E_PORT lets the suite avoid a stale server already bound to 4173.
+const PORT = Number(process.env.E2E_PORT || 4173);
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
@@ -20,13 +23,17 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: `http://127.0.0.1:${PORT}`,
     trace: 'on-first-retry',
     launchOptions: {
       // SwiftShader gives us real WebGL2 in headless CI. Without these the
       // canvas silently fails to get a context and every visual test is
       // meaningless rather than red.
-      args: ['--enable-unsafe-swiftshader', '--use-gl=angle', '--ignore-gpu-blocklist'],
+      args: [
+        '--enable-unsafe-swiftshader',
+        '--use-gl=angle',
+        '--ignore-gpu-blocklist',
+      ],
       // Escape hatch for environments that ship a Chromium build Playwright
       // did not download itself.
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined,
@@ -37,8 +44,8 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 5'] }, grep: /@dom|@mobile/ },
   ],
   webServer: {
-    command: 'npm run build && npm run preview -- --host 127.0.0.1 --port 4173',
-    url: 'http://127.0.0.1:4173',
+    command: `npm run build && npm run preview -- --host 127.0.0.1 --port ${PORT}`,
+    url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 300_000,
   },

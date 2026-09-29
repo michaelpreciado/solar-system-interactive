@@ -33,8 +33,23 @@
       property="og:description"
       content="Fly through a procedurally rendered solar system. Real orbits, real scale, real science."
     />
+    <meta property="og:site_name" content="Orrery" />
     <meta property="og:image" content="/og-image.svg" />
+    <meta property="og:image:type" content="image/svg+xml" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Orrery: a glowing cyan solar system on a near-black field"
+    />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Orrery — Interactive Solar System" />
+    <meta
+      name="twitter:description"
+      content="Fly through a procedurally rendered solar system. Real orbits, real scale, real science."
+    />
+    <meta name="twitter:image" content="/og-image.svg" />
+    <meta name="author" content="Preciado Tech" />
 
     <style>
       /* Painted before any JS runs, so the first frame is the deep-space
@@ -88,7 +103,8 @@
     </div>
     <noscript>
       <p style="padding: 24px">
-        Orrery renders the solar system with WebGL and needs JavaScript enabled.
+        Orrery renders the solar system with WebGL 2 and needs JavaScript
+        enabled.
       </p>
     </noscript>
     <script type="module" src="/src/main.tsx"></script>

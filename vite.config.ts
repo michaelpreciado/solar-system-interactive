@@ -18,6 +18,8 @@ export default defineConfig({
         background_color: '#04060a',
         display: 'standalone',
         orientation: 'any',
+        categories: ['education', 'science'],
+        lang: 'en',
         start_url: '/',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
@@ -33,6 +35,8 @@ export default defineConfig({
       workbox: {
         // three.js plus the shader bundle is comfortably over the 2 MB default.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        navigateFallback: '/index.html',
+        cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
       },
     }),

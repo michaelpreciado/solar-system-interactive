@@ -33,7 +33,7 @@ as an ordinary texture. Six-plus octaves of warped 3D noise per fragment is fine
 on a desktop GPU and a hard failure on a phone; doing it once costs a few frames
 and buys two texture fetches per pixel forever after.
 
-The thing that makes it read as *those* planets rather than as procedural mush is
+The thing that makes it read as _those_ planets rather than as procedural mush is
 that the landmarks are **hand-placed analytic primitives at their real
 coordinates**, with noise only as connective tissue. The Great Red Spot is an
 ellipse at 22°S whose sampling domain rotates with distance from its centre, so
@@ -55,32 +55,46 @@ shadows are analytic too — one ray-plane intersection and a 1-D texture fetch,
 which gives a razor-sharp Cassini-division shadow at any zoom that no shadow map
 could manage.
 
+## Production notes
+
+- **First-run fly-in.** The first visit glides in from a high, wide view once the
+  bake finishes; it is skipped on later visits and under reduced motion.
+- **Graceful failure.** No WebGL 2, or a lost GPU context mid-session, shows a
+  clear reload card rather than a blank page. Render errors hit the error boundary.
+- **Quality tiers.** `minimal` through `ultra` scale DPR, bake size, bloom,
+  MSAA, asteroids and atmosphere steps together; the adaptive controller steps
+  tiers on p95 frame time. Force one with `?tier=high`.
+- **Offline.** A service worker precaches the shell, so the app reopens offline.
+- **Accessibility.** Visible focus rings, a screen-reader description of the
+  canvas, keyboard shortcuts for time and panels, and `prefers-reduced-motion`
+  disables the intro, springs and grain.
+
 ## Controls
 
-| | |
-| --- | --- |
-| Drag | Orbit |
-| Scroll / pinch | Zoom |
-| Click a body | Fly to it |
-| `Space` | Play / pause time |
-| `←` `→` | Step a day (hold `Shift` for a month) |
-| `[` `]` | Previous / next world |
-| `0`–`9` | Jump to a world |
-| `T` | Toggle true scale |
-| `O` / `L` | Orbit paths / labels |
-| `F` | Free flight |
-| `H` | Back to today |
-| `` ` `` | Performance overlay |
+|                |                                       |
+| -------------- | ------------------------------------- |
+| Drag           | Orbit                                 |
+| Scroll / pinch | Zoom                                  |
+| Click a body   | Fly to it                             |
+| `Space`        | Play / pause time                     |
+| `←` `→`        | Step a day (hold `Shift` for a month) |
+| `[` `]`        | Previous / next world                 |
+| `0`–`9`        | Jump to a world                       |
+| `T`            | Toggle true scale                     |
+| `O` / `L`      | Orbit paths / labels                  |
+| `F`            | Free flight                           |
+| `H`            | Back to today                         |
+| `` ` ``        | Performance overlay                   |
 
 ## Accuracy
 
 Positions come from Standish's approximate Keplerian elements with per-century
 secular rates. They are good to roughly an arcminute between **1800 and 2050**;
-outside that window the date readout is marked *Extrapolated* rather than
+outside that window the date readout is marked _Extrapolated_ rather than
 quietly presenting extrapolation as fact.
 
 Body radii, masses, rotation periods, obliquities and compositions are real. The
-*displayed* sizes and orbital distances are not — at true scale Mercury sits
+_displayed_ sizes and orbital distances are not — at true scale Mercury sits
 inside the Sun's disc and Neptune is off screen. The scale slider interpolates
 continuously between the artistic layout and the real one, so you can see exactly
 how much is being cheated.

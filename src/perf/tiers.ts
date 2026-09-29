@@ -38,6 +38,8 @@ export interface QualitySettings {
   filmGrain: boolean;
   godRays: boolean;
   maxActiveMoons: number;
+  /** Use the Blender-baked Earth maps and cloud shell (lazy loaded). */
+  bakedEarth: boolean;
 }
 
 export const TIERS: Record<TierName, QualitySettings> = {
@@ -59,6 +61,7 @@ export const TIERS: Record<TierName, QualitySettings> = {
     filmGrain: true,
     godRays: true,
     maxActiveMoons: 24,
+    bakedEarth: true,
   },
   high: {
     name: 'high',
@@ -78,6 +81,7 @@ export const TIERS: Record<TierName, QualitySettings> = {
     filmGrain: true,
     godRays: false,
     maxActiveMoons: 20,
+    bakedEarth: true,
   },
   balanced: {
     name: 'balanced',
@@ -97,6 +101,7 @@ export const TIERS: Record<TierName, QualitySettings> = {
     filmGrain: false,
     godRays: false,
     maxActiveMoons: 14,
+    bakedEarth: true,
   },
   efficient: {
     name: 'efficient',
@@ -116,6 +121,7 @@ export const TIERS: Record<TierName, QualitySettings> = {
     filmGrain: false,
     godRays: false,
     maxActiveMoons: 8,
+    bakedEarth: false,
   },
   minimal: {
     name: 'minimal',
@@ -135,6 +141,7 @@ export const TIERS: Record<TierName, QualitySettings> = {
     filmGrain: false,
     godRays: false,
     maxActiveMoons: 4,
+    bakedEarth: false,
   },
 };
 
@@ -169,8 +176,10 @@ export function probeDevice(canvas?: HTMLCanvasElement): DeviceProbe {
   const nav = typeof navigator !== 'undefined' ? navigator : undefined;
   const ua = nav?.userAgent ?? '';
   const hasCoarsePointer =
-    typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || hasCoarsePointer;
+    typeof matchMedia !== 'undefined' &&
+    matchMedia('(pointer: coarse)').matches;
+  const isMobile =
+    /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || hasCoarsePointer;
 
   let renderer = 'unknown';
   let maxTextureSize = 4096;
@@ -184,12 +193,17 @@ export function probeDevice(canvas?: HTMLCanvasElement): DeviceProbe {
       maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
       const dbg = gl.getExtension('WEBGL_debug_renderer_info');
       if (dbg) renderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL));
+      // Release the probe context immediately: browsers cap live contexts
+      // (about 16), and the throwaway one would otherwise linger until GC.
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
     }
   } catch {
     // Probing must never throw; a conservative tier is a fine fallback.
   }
 
-  const isSoftware = /swiftshader|llvmpipe|software|mesa offscreen/i.test(renderer);
+  const isSoftware = /swiftshader|llvmpipe|software|mesa offscreen/i.test(
+    renderer
+  );
 
   return {
     isMobile,
@@ -213,7 +227,9 @@ export function probeDevice(canvas?: HTMLCanvasElement): DeviceProbe {
 export function tierFromUrl(): TierName | null {
   if (typeof location === 'undefined') return null;
   const value = new URLSearchParams(location.search).get('tier');
-  return value && (TIER_ORDER as string[]).includes(value) ? (value as TierName) : null;
+  return value && (TIER_ORDER as string[]).includes(value)
+    ? (value as TierName)
+    : null;
 }
 
 /** Pick a starting tier. The adaptive controller refines it from there. */

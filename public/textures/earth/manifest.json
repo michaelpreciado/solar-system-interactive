@@ -1,0 +1,51 @@
+{
+  "generator": "tools/earth/build_earth.py",
+  "blender": "4.2.0",
+  "seed": 7.0,
+  "seaLevel": 0.5524546504020691,
+  "oceanFraction": 0.708,
+  "mapping": "equirectangular, +Y up in app space; see src/gfx/earth",
+  "files": {
+    "albedo": {
+      "file": "earth_albedo.webp",
+      "bytes": 174536,
+      "size": [
+        2048,
+        1024
+      ]
+    },
+    "normal": {
+      "file": "earth_normal.webp",
+      "bytes": 193532,
+      "size": [
+        2048,
+        1024
+      ]
+    },
+    "clouds": {
+      "file": "earth_clouds.webp",
+      "bytes": 168598,
+      "size": [
+        2048,
+        1024
+      ]
+    },
+    "night": {
+      "file": "earth_night.webp",
+      "bytes": 21640,
+      "size": [
+        1024,
+        512
+      ]
+    },
+    "spec": {
+      "file": "earth_spec.webp",
+      "bytes": 27524,
+      "size": [
+        1024,
+        512
+      ]
+    }
+  },
+  "totalBytes": 585830
+}

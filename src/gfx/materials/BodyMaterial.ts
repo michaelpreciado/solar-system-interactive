@@ -19,6 +19,7 @@
 
 import {
   Color,
+  DataTexture,
   MeshStandardMaterial,
   Texture,
   Vector3,
@@ -38,6 +39,50 @@ export interface BodyMaterialOptions {
   ringShadow?: boolean;
   /** Extra procedural octaves blended in at close range. */
   detailOctaves?: number;
+  /** Compiles the baked-Earth path (Blender maps, cloud shadow, relief). */
+  earthMaps?: boolean;
+}
+
+/** Shared by the surface shader and the cloud shell so both agree on drift. */
+export const EARTH_GLSL = `
+const float EARTH_PI = 3.14159265359;
+vec2 earthUV(vec3 d) {
+  return vec2(0.5 + atan(-d.z, d.x) / (2.0 * EARTH_PI), 0.5 + asin(clamp(d.y, -1.0, 1.0)) / EARTH_PI);
+}
+// Seam-safe fetch: atan() makes uv.x jump at the date line, which blows up the
+// screen-space derivatives and picks the smallest mip (a dashed line). Use the
+// derivative of whichever of uv.x / fract(uv.x + 0.5) is continuous.
+vec4 earthTex(sampler2D s, vec3 d) {
+  vec2 uv = earthUV(d);
+  vec2 uvB = vec2(fract(uv.x + 0.5), uv.y);
+  vec2 dx = dFdx(uv), dy = dFdy(uv);
+  vec2 dxB = dFdx(uvB), dyB = dFdy(uvB);
+  if (abs(dx.x) + abs(dy.x) > abs(dxB.x) + abs(dyB.x)) { dx = dxB; dy = dyB; }
+  return textureGrad(s, uv, dx, dy);
+}
+// Cloud deck drifts slowly relative to the ground.
+vec3 earthCloudDir(vec3 d, float t) {
+  float a = t * 0.004;
+  float c = cos(a), s = sin(a);
+  return vec3(c * d.x - s * d.z, d.y, s * d.x + c * d.z);
+}
+`;
+
+let earthPh: Texture | null = null;
+function earthPlaceholder(): Texture {
+  if (!earthPh) {
+    earthPh = new DataTexture(new Uint8Array([128, 128, 255, 255]), 1, 1);
+    earthPh.needsUpdate = true;
+  }
+  return earthPh;
+}
+
+export interface EarthTextures {
+  albedo: Texture;
+  normal: Texture;
+  spec: Texture;
+  night: Texture;
+  clouds: Texture;
 }
 
 export class BodyMaterial extends MeshStandardMaterial {
@@ -65,7 +110,17 @@ export class BodyMaterial extends MeshStandardMaterial {
     uRingProfile: { value: null as Texture | null },
     /** Oblateness: polar radius / equatorial radius. */
     uPolarRatio: { value: 1 },
+    uEarthAlbedo: { value: earthPlaceholder() },
+    uEarthNormal: { value: earthPlaceholder() },
+    uEarthSpec: { value: earthPlaceholder() },
+    uEarthNight: { value: earthPlaceholder() },
+    uEarthClouds: { value: earthPlaceholder() },
+    /** 0 = procedural fallback, 1 = fully baked Earth. Eased by the driver. */
+    uEarthMix: { value: 0 },
   };
+
+  /** Where `uEarthMix` is heading; the driver eases toward it. */
+  earthTarget = 0;
 
   private readonly opts: Required<BodyMaterialOptions>;
 
@@ -80,6 +135,7 @@ export class BodyMaterial extends MeshStandardMaterial {
       banded: options.banded ?? false,
       ringShadow: options.ringShadow ?? false,
       detailOctaves: options.detailOctaves ?? 0,
+      earthMaps: options.earthMaps ?? false,
     };
   }
 
@@ -87,6 +143,15 @@ export class BodyMaterial extends MeshStandardMaterial {
     if (n === this.opts.detailOctaves) return;
     this.opts.detailOctaves = n;
     this.needsUpdate = true;
+  }
+
+  setEarthTextures(t: EarthTextures): void {
+    const u = this.bodyUniforms;
+    u.uEarthAlbedo.value = t.albedo;
+    u.uEarthNormal.value = t.normal;
+    u.uEarthSpec.value = t.spec;
+    u.uEarthNight.value = t.night;
+    u.uEarthClouds.value = t.clouds;
   }
 
   setTextures(albedo: Texture, surface: Texture): void {
@@ -105,7 +170,7 @@ export class BodyMaterial extends MeshStandardMaterial {
    */
   override customProgramCacheKey(): string {
     const o = this.opts;
-    return `body|${o.terran ? 1 : 0}${o.banded ? 1 : 0}${o.ringShadow ? 1 : 0}|${o.detailOctaves}`;
+    return `body|${o.terran ? 1 : 0}${o.banded ? 1 : 0}${o.ringShadow ? 1 : 0}|${o.detailOctaves}|${o.earthMaps ? 1 : 0}`;
   }
 
   override onBeforeCompile(shader: WebGLProgramParametersWithUniforms): void {
@@ -119,6 +184,7 @@ export class BodyMaterial extends MeshStandardMaterial {
       defines.push('#define BODY_DETAIL');
       defines.push(`#define BODY_DETAIL_OCTAVES ${this.opts.detailOctaves}`);
     }
+    if (this.opts.earthMaps) defines.push('#define BODY_EARTH');
     const defineBlock = defines.join('\n');
 
     // ------------------------------------------------------------- vertex
@@ -162,6 +228,21 @@ uniform float uSunIrradiance;
 uniform vec4 uRingBounds;
 uniform sampler2D uRingProfile;
 uniform float uPolarRatio;
+#ifdef BODY_EARTH
+uniform sampler2D uEarthAlbedo;
+uniform sampler2D uEarthNormal;
+uniform sampler2D uEarthSpec;
+uniform sampler2D uEarthNight;
+uniform sampler2D uEarthClouds;
+uniform float uEarthMix;
+${EARTH_GLSL}
+// Per-fragment state shared between the injected blocks below.
+float gCloud = 0.0;
+float gWater = 0.0;
+float gEarthRough = 1.0;
+float gNight = 0.0;
+vec3 gObjN;
+#endif
 
 ${this.opts.detailOctaves > 0 ? SIMPLEX3 + FBM : ''}
 
@@ -214,6 +295,27 @@ vec4 surfaceTexel = textureCube(uSurfaceCube, sampleDir);
 
 diffuseColor.rgb *= albedoTexel.rgb;
 
+#ifdef BODY_EARTH
+  gObjN = normalize(vObjectDir);
+  gWater = albedoTexel.a;
+  gEarthRough = surfaceTexel.g;
+  gNight = surfaceTexel.b;
+  if (uEarthMix > 0.001) {
+    vec3 eAlb = earthTex(uEarthAlbedo, sampleDir).rgb;
+    vec3 eSpec = earthTex(uEarthSpec, sampleDir).rgb;
+    // Cloud shadow: the deck floats above the ground, so the shadow is
+    // displaced away from the Sun; sample the cloud map along the sun ray.
+    vec3 shadowDir = normalize(sampleDir + uSunDirObject * 0.018);
+    float cShadow = earthTex(uEarthClouds, earthCloudDir(shadowDir, uTime)).r;
+    gCloud = earthTex(uEarthClouds, earthCloudDir(sampleDir, uTime)).r;
+    eAlb *= 1.0 - 0.5 * smoothstep(0.15, 0.9, cShadow);
+    diffuseColor.rgb = mix(diffuseColor.rgb, eAlb, uEarthMix);
+    gWater = mix(gWater, eSpec.r, uEarthMix);
+    gEarthRough = mix(gEarthRough, eSpec.g, uEarthMix);
+    gNight = mix(gNight, earthTex(uEarthNight, sampleDir).r, uEarthMix);
+  }
+#endif
+
 #ifdef BODY_DETAIL
   if (uDetailBlend > 0.001) {
     float d = fbm3(sampleDir * uDetailScale + uSeed, BODY_DETAIL_OCTAVES, 2.1, 0.5);
@@ -232,6 +334,9 @@ float roughnessFactor = roughness * surfaceTexel.g;
   // The ocean mask is in albedo.a. A smooth ocean plus three's PBR gives the
   // specular sun-glint for free -- no bespoke water shader required.
   roughnessFactor = mix(roughnessFactor, 0.05, albedoTexel.a);
+#endif
+#ifdef BODY_EARTH
+  roughnessFactor = mix(roughnessFactor, mix(gEarthRough, 0.06, gWater), uEarthMix);
 #endif
 roughnessFactor = clamp(roughnessFactor, 0.03, 1.0);
 `
@@ -252,6 +357,18 @@ roughnessFactor = clamp(roughnessFactor, 0.03, 1.0);
   vec3 bumped = normalize(normal - (t1 * (hR - hL) + t2 * (hU - hD)) * 12.0);
   normal = normalize(mix(normal, bumped, 0.85));
 }
+#ifdef BODY_EARTH
+if (uEarthMix > 0.001) {
+  // Tangent-space relief from the Blender height bake. Tangents follow the
+  // equirect layout: east = increasing u, north = +Y.
+  vec3 n0 = normalize(vObjectDir);
+  vec3 east = normalize(vec3(n0.z, 0.0, -n0.x) + vec3(1e-5, 0.0, 0.0));
+  vec3 north = cross(n0, east);
+  vec3 nm = earthTex(uEarthNormal, n0).xyz * 2.0 - 1.0;
+  vec3 pert = normalize(n0 + (east * nm.x + north * nm.y) * 1.6);
+  gObjN = normalize(mix(n0, pert, uEarthMix));
+}
+#endif
 `
       )
       /**
@@ -275,7 +392,11 @@ roughnessFactor = clamp(roughnessFactor, 0.03, 1.0);
   // quantity -- half a degree from Earth, 20 arcseconds from Neptune -- so the
   // terminator's softness follows from physics rather than from taste.
   float w = max(uSunAngularRadius, 0.0015);
-  float dayFactor = smoothstep(-w, w, NdotL) * max(NdotL, 0.0);
+  float lam = NdotL;
+#ifdef BODY_EARTH
+  lam = dot(gObjN, uSunDirObject);
+#endif
+  float dayFactor = smoothstep(-w, w, NdotL) * max(lam, 0.0);
 
   float shadow = 1.0;
 #ifdef BODY_RING_SHADOW
@@ -288,9 +409,17 @@ roughnessFactor = clamp(roughnessFactor, 0.03, 1.0);
   // Keep a specular lobe for oceans and ice, using the same analytic direction.
   vec3 viewDir = normalize(vViewPosition);
   vec3 halfDir = normalize(uSunDirObject + normalize(-vObjectPos));
+#ifdef BODY_EARTH
+  objNormal = gObjN;
+#endif
   float NdotH = max(dot(objNormal, halfDir), 0.0);
   float gloss = pow(NdotH, mix(400.0, 8.0, roughnessFactor));
   reflectedLight.directSpecular = sun * gloss * (1.0 - roughnessFactor) * 0.7;
+#ifdef BODY_EARTH
+  // Clouds hide the sea glint; water gets a broader Fresnel-ish sheen too.
+  reflectedLight.directSpecular *= 1.0 - 0.92 * smoothstep(0.1, 0.7, gCloud) * uEarthMix;
+  reflectedLight.directSpecular += sun * gWater * uEarthMix * 0.18 * pow(NdotH, 24.0) * (1.0 - smoothstep(0.1, 0.7, gCloud));
+#endif
 }
 `
       )
@@ -303,7 +432,11 @@ roughnessFactor = clamp(roughnessFactor, 0.03, 1.0);
 {
   float NdotL = dot(normalize(vObjectDir), uSunDirObject);
   float night = smoothstep(0.10, -0.06, NdotL);
+#ifdef BODY_EARTH
+  float lights = mix(gNight, pow(gNight, 1.7) * 0.22, uEarthMix) * night * (1.0 - smoothstep(0.1, 0.8, gCloud) * 0.85);
+#else
   float lights = surfaceTexel.b * night * (1.0 - surfaceTexel.a * 0.75);
+#endif
   totalEmissiveRadiance += uNightLightColor * lights * uNightLightStrength;
 }
 #else

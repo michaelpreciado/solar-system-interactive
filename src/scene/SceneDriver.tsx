@@ -64,6 +64,7 @@ export function SceneDriver({ handle, labelLayer, onReady }: SceneDriverProps) {
   const telemetryAccumulator = useRef(0);
   const lastFrameTime = useRef(performance.now());
   const readyFired = useRef(false);
+  const introPending = useRef(false);
 
   const { rig, scaleMorph } = handle;
 
@@ -124,8 +125,17 @@ export function SceneDriver({ handle, labelLayer, onReady }: SceneDriverProps) {
 
     // Open on a system-wide view rather than tight on the Sun, so the first
     // thing anyone sees is the whole thing turning.
-    rig.distance.snap(430);
-    rig.polar.snap(1.02);
+    // First visit only: start high and far, and glide in once the scene is
+    // revealed (see the ready branch below). Reduced motion skips it.
+    if (!uiState().introComplete && !uiState().reducedMotion) {
+      introPending.current = true;
+      rig.distance.snap(1500);
+      rig.polar.snap(0.38);
+      rig.azimuth.snap(rig.azimuth.value - 1.1);
+    } else {
+      rig.distance.snap(430);
+      rig.polar.snap(1.02);
+    }
 
     return () => {
       unsubScale();
@@ -296,6 +306,21 @@ export function SceneDriver({ handle, labelLayer, onReady }: SceneDriverProps) {
           (u.uSunDirObject.value as Vector3).copy(tmpB);
         }
 
+        // Ease the baked-Earth blend; the cloud shell only draws while visible.
+        if (h.id === 'earth' && 'earthTarget' in mat) {
+          const m = u.uEarthMix.value as number;
+          const next = m + (mat.earthTarget - m) * Math.min(1, dt * 2.5);
+          u.uEarthMix.value =
+            Math.abs(next - mat.earthTarget) < 0.004 ? mat.earthTarget : next;
+          if (h.clouds) {
+            const cm = h.clouds.material as unknown as {
+              uniforms: Record<string, { value: number }>;
+            };
+            cm.uniforms.uOpacity.value = u.uEarthMix.value as number;
+            h.clouds.visible = (u.uEarthMix.value as number) > 0.003;
+          }
+        }
+
         // Differential rotation for banded atmospheres.
         u.uBandScroll.value = (simClock.jd * 0.06) % TAU;
 
@@ -353,6 +378,16 @@ export function SceneDriver({ handle, labelLayer, onReady }: SceneDriverProps) {
 
     if (!readyFired.current) {
       readyFired.current = true;
+      if (introPending.current) {
+        introPending.current = false;
+        rig.distance.setHalfLife(1.15);
+        rig.polar.setHalfLife(1.0);
+        rig.azimuth.setHalfLife(1.0);
+        rig.distance.target = 430;
+        rig.polar.target = 1.02;
+        rig.azimuth.target = rig.azimuth.value + 1.1;
+        useUIStore.getState().completeIntro();
+      }
       onReady?.();
     }
   }, 0);
