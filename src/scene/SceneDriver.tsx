@@ -306,6 +306,21 @@ export function SceneDriver({ handle, labelLayer, onReady }: SceneDriverProps) {
           (u.uSunDirObject.value as Vector3).copy(tmpB);
         }
 
+        // Ease the baked-Earth blend; the cloud shell only draws while visible.
+        if (h.id === 'earth' && 'earthTarget' in mat) {
+          const m = u.uEarthMix.value as number;
+          const next = m + (mat.earthTarget - m) * Math.min(1, dt * 2.5);
+          u.uEarthMix.value =
+            Math.abs(next - mat.earthTarget) < 0.004 ? mat.earthTarget : next;
+          if (h.clouds) {
+            const cm = h.clouds.material as unknown as {
+              uniforms: Record<string, { value: number }>;
+            };
+            cm.uniforms.uOpacity.value = u.uEarthMix.value as number;
+            h.clouds.visible = (u.uEarthMix.value as number) > 0.003;
+          }
+        }
+
         // Differential rotation for banded atmospheres.
         u.uBandScroll.value = (simClock.jd * 0.06) % TAU;
 

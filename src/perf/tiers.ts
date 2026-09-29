@@ -38,6 +38,8 @@ export interface QualitySettings {
   filmGrain: boolean;
   godRays: boolean;
   maxActiveMoons: number;
+  /** Use the Blender-baked Earth maps and cloud shell (lazy loaded). */
+  bakedEarth: boolean;
 }
 
 export const TIERS: Record<TierName, QualitySettings> = {
@@ -59,6 +61,7 @@ export const TIERS: Record<TierName, QualitySettings> = {
     filmGrain: true,
     godRays: true,
     maxActiveMoons: 24,
+    bakedEarth: true,
   },
   high: {
     name: 'high',
@@ -78,6 +81,7 @@ export const TIERS: Record<TierName, QualitySettings> = {
     filmGrain: true,
     godRays: false,
     maxActiveMoons: 20,
+    bakedEarth: true,
   },
   balanced: {
     name: 'balanced',
@@ -97,6 +101,7 @@ export const TIERS: Record<TierName, QualitySettings> = {
     filmGrain: false,
     godRays: false,
     maxActiveMoons: 14,
+    bakedEarth: true,
   },
   efficient: {
     name: 'efficient',
@@ -116,6 +121,7 @@ export const TIERS: Record<TierName, QualitySettings> = {
     filmGrain: false,
     godRays: false,
     maxActiveMoons: 8,
+    bakedEarth: false,
   },
   minimal: {
     name: 'minimal',
@@ -135,6 +141,7 @@ export const TIERS: Record<TierName, QualitySettings> = {
     filmGrain: false,
     godRays: false,
     maxActiveMoons: 4,
+    bakedEarth: false,
   },
 };
 

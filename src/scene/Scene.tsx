@@ -23,6 +23,7 @@ import {
 import { BODIES, type BodyDef } from '../data/bodies';
 import { AtmosphereMaterial } from '../gfx/materials/AtmosphereMaterial';
 import { BodyMaterial } from '../gfx/materials/BodyMaterial';
+import { CloudMaterial } from '../gfx/materials/CloudMaterial';
 import { CoronaMaterial, StarMaterial } from '../gfx/materials/StarMaterial';
 import {
   RingMaterial,
@@ -153,8 +154,51 @@ function Body({ def, scheduler, labelLayer }: BodyProps) {
       banded: def.archetype === 'gasGiant' || def.archetype === 'iceGiant',
       ringShadow: def.id === 'saturn',
       detailOctaves: quality.settings.detailOctaves,
+      earthMaps: def.id === 'earth',
     });
   }, [def.archetype, def.id, isStar]);
+
+  const cloudRef = useRef<Mesh>(null);
+  const cloudMaterial = useMemo(() => {
+    if (def.id !== 'earth' || !(material instanceof BodyMaterial)) return null;
+    const u = material.bodyUniforms;
+    return new CloudMaterial({
+      uSunDirObject: u.uSunDirObject,
+      uSunColor: u.uSunColor,
+      uSunIrradiance: u.uSunIrradiance,
+      uTime: u.uTime,
+    });
+  }, [def.id, material]);
+
+  // Baked Earth: lazy loaded, gated by the quality tier. The procedural bake
+  // stays the instant fallback while loading and on low tiers.
+  useEffect(() => {
+    if (!cloudMaterial || !(material instanceof BodyMaterial)) return;
+    let cancelled = false;
+    const apply = (want: boolean) => {
+      if (!want) {
+        material.earthTarget = 0;
+        return;
+      }
+      void import('../gfx/earth/earthTextures')
+        .then((m) => m.loadEarthTextures())
+        .then((t) => {
+          if (cancelled) return;
+          material.setEarthTextures(t);
+          cloudMaterial.uniforms.uClouds.value = t.clouds;
+          material.earthTarget = quality.settings.bakedEarth ? 1 : 0;
+        })
+        .catch(() => {
+          /* keep the procedural Earth */
+        });
+    };
+    apply(quality.settings.bakedEarth);
+    const off = quality.subscribe((s) => apply(s.bakedEarth));
+    return () => {
+      cancelled = true;
+      off();
+    };
+  }, [cloudMaterial, material]);
 
   const atmosphereMaterial = useMemo(
     () =>
@@ -204,6 +248,7 @@ function Body({ def, scheduler, labelLayer }: BodyProps) {
       mesh: meshRef.current ?? undefined,
       material,
       atmosphere: atmosphereRef.current ?? undefined,
+      clouds: cloudRef.current ?? undefined,
       atmosphereMaterial: atmosphereMaterial ?? undefined,
       label,
       active: true,
@@ -215,14 +260,15 @@ function Body({ def, scheduler, labelLayer }: BodyProps) {
       unregister();
       label.remove();
     };
-  }, [def, material, atmosphereMaterial, labelLayer]);
+  }, [def, material, atmosphereMaterial, cloudMaterial, labelLayer]);
 
   useEffect(
     () => () => {
       material.dispose();
       atmosphereMaterial?.dispose();
+      cloudMaterial?.dispose();
     },
-    [material, atmosphereMaterial]
+    [material, atmosphereMaterial, cloudMaterial]
   );
 
   // Geometry is unit-radius; the driver scales the group. That way a scale
@@ -240,6 +286,17 @@ function Body({ def, scheduler, labelLayer }: BodyProps) {
           // geometry's unit bounding sphere times the scale, which is correct.
           userData={{ bodyId: def.id }}
         />
+
+        {cloudMaterial && (
+          <mesh
+            ref={cloudRef}
+            geometry={geometry}
+            material={cloudMaterial}
+            scale={1.01}
+            renderOrder={1}
+            visible={false}
+          />
+        )}
 
         {def.atmosphere && atmosphereMaterial && (
           <mesh
