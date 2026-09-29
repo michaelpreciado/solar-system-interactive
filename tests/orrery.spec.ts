@@ -216,6 +216,15 @@ test.describe('Orrery', () => {
     // Light-travel time to Jupiter is 35-52 minutes depending on where the two
     // planets are. Anything outside that means the ephemeris or the unit
     // conversion is wrong.
+    // The readout is written at 10 Hz by the driver and starts as "--", so
+    // under a ~2 fps software renderer it can lag the inspector by seconds.
+    await expect
+      .poll(
+        async () =>
+          plain(await page.locator('.inspector__live dd').nth(2).textContent()),
+        { timeout: 120_000 }
+      )
+      .toContain('minutes');
     const light = plain(
       await page.locator('.inspector__live dd').nth(2).textContent()
     );
@@ -226,13 +235,25 @@ test.describe('Orrery', () => {
 
     // The camera must actually arrive, not merely re-aim. Jupiter's rendered
     // radius is 8.2 units, framed at 3.6x, so it should settle near 29,500 km.
-    const cam = await waitUntilStable(() =>
-      page.locator('.inspector__live dd').nth(0).textContent()
-    );
-    const km = Number(/([\d.]+)/.exec(cam)?.[1] ?? '0');
-    expect(cam, `camera distance was ${cam}`).toContain('thousand km');
-    expect(km).toBeGreaterThan(20);
-    expect(km).toBeLessThan(45);
+    // Poll for arrival rather than for stability: at ~2 fps the readout can sit
+    // still for seconds mid-flight, which a settle timer mistakes for landing.
+    const readKm = async () => {
+      const text = plain(
+        await page.locator('.inspector__live dd').nth(0).textContent()
+      );
+      return text.includes('thousand km')
+        ? Number(/([\d.]+)/.exec(text)?.[1] ?? '0')
+        : 0;
+    };
+    await expect
+      .poll(
+        async () => {
+          const km = await readKm();
+          return km > 20 && km < 45;
+        },
+        { timeout: 240_000, message: 'camera settles near 29,500 km' }
+      )
+      .toBe(true);
   });
 
   test('switches between explorer and scientist voices @dom', async ({
