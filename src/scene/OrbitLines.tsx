@@ -88,9 +88,10 @@ export function OrbitLines() {
       geometry.attributes.position.needsUpdate = true;
 
       const material = new LineBasicMaterial({
-        color: new Color(body.accent),
+        // Mostly the matrix cyan, tinted toward the body so orbits stay legible.
+        color: new Color('#5ce1f2').lerp(new Color(body.accent), 0.4),
         transparent: true,
-        opacity: 0.28,
+        opacity: 0.2,
         blending: AdditiveBlending,
         depthWrite: false,
         toneMapped: false,
@@ -100,7 +101,14 @@ export function OrbitLines() {
       line.frustumCulled = false;
       line.renderOrder = -1;
 
-      out.push({ id: body.id, line, material, truePositions, compressedPositions, geometry });
+      out.push({
+        id: body.id,
+        line,
+        material,
+        truePositions,
+        compressedPositions,
+        geometry,
+      });
     }
 
     return out;
@@ -128,6 +136,16 @@ export function OrbitLines() {
   useFrame(() => {
     const group = groupRef.current;
     if (!group) return;
+
+    // Ease the focused body's orbit up and the rest down: a soft trail
+    // highlight instead of nine identical lines.
+    const focused = uiState().focusedBody;
+    for (const e of entries) {
+      const target = e.id === focused ? 0.62 : 0.2;
+      const m = e.material;
+      if (Math.abs(m.opacity - target) > 0.003)
+        m.opacity += (target - m.opacity) * 0.12;
+    }
 
     const visible = uiState().overlays.orbits;
     group.visible = visible;
@@ -169,4 +187,3 @@ export function OrbitLines() {
 
   return <group ref={groupRef} />;
 }
-

@@ -14,10 +14,12 @@ import { LoadingScreen } from './ui/LoadingScreen';
 import { Hud } from './ui/Hud';
 import { DebugHud } from './perf/DebugHud';
 import { useKeyboardShortcuts } from './ui/useKeyboardShortcuts';
+import { useCursorGlow } from './ui/useCursorGlow';
 import { audio } from './audio/engine';
 
 export default function App() {
   const labelLayer = useRef<HTMLDivElement>(null);
+  const appRoot = useRef<HTMLDivElement>(null);
   const handle = useMemo(() => createDriverHandle(), []);
   const [bakeProgress, setBakeProgress] = useState(0);
   const [ready, setReady] = useState(false);
@@ -66,6 +68,7 @@ export default function App() {
   }, [setReducedMotion]);
 
   useKeyboardShortcuts(handle);
+  useCursorGlow(appRoot);
 
   useEffect(() => () => audio.dispose(), []);
 
@@ -76,7 +79,7 @@ export default function App() {
   const onReady = useCallback(() => setReady(true), []);
 
   return (
-    <div className="app-root">
+    <div className="app-root" ref={appRoot}>
       <Canvas
         dpr={dpr}
         gl={{
@@ -119,7 +122,12 @@ export default function App() {
         <span className="cinematic-frame__grain" />
       </div>
 
+      <div className="cursor-glow" aria-hidden="true" />
+
       <Hud />
+      <span className="credit">
+        Built by <b>Preciado Tech</b>
+      </span>
       <DebugHud />
       <LoadingScreen progress={bakeProgress} ready={ready} />
     </div>

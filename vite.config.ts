@@ -14,8 +14,8 @@ export default defineConfig({
         short_name: 'Orrery',
         description:
           'Fly through a procedurally rendered solar system. Real orbits, real scale, real science.',
-        theme_color: '#05060b',
-        background_color: '#05060b',
+        theme_color: '#04060a',
+        background_color: '#04060a',
         display: 'standalone',
         orientation: 'any',
         start_url: '/',
@@ -50,8 +50,10 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules')) {
             // postprocessing must land with three or the chunks import-cycle.
-            if (id.includes('three') || id.includes('postprocessing')) return 'three';
-            if (id.includes('react') || id.includes('scheduler')) return 'react';
+            if (id.includes('three') || id.includes('postprocessing'))
+              return 'three';
+            if (id.includes('react') || id.includes('scheduler'))
+              return 'react';
             if (id.includes('framer-motion')) return 'motion';
           }
           return undefined;
