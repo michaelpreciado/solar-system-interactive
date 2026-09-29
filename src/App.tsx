@@ -16,6 +16,7 @@ import { DebugHud } from './perf/DebugHud';
 import { useKeyboardShortcuts } from './ui/useKeyboardShortcuts';
 import { useCursorGlow } from './ui/useCursorGlow';
 import { audio } from './audio/engine';
+import { GlFallback } from './ui/GlFallback';
 
 export default function App() {
   const labelLayer = useRef<HTMLDivElement>(null);
@@ -27,7 +28,7 @@ export default function App() {
 
   // Probe the device and pick a starting tier before the canvas mounts, so the
   // first bake happens at the right resolution rather than being redone.
-  const [dpr] = useState(() => {
+  const [{ dpr, webgl2 }] = useState(() => {
     const probe = probeDevice();
     const forced = tierFromUrl();
     const tier = initialTier(probe);
@@ -39,8 +40,12 @@ export default function App() {
     } else {
       quality.setTier(useUIStore.getState().tier, 'user preference');
     }
-    return Math.min(window.devicePixelRatio || 1, quality.settings.maxDpr);
+    return {
+      dpr: Math.min(window.devicePixelRatio || 1, quality.settings.maxDpr),
+      webgl2: probe.webgl2,
+    };
   });
+  const [contextLost, setContextLost] = useState(false);
 
   useEffect(() => {
     quality.detectRefreshRate().then((hz) => {
@@ -78,8 +83,16 @@ export default function App() {
 
   const onReady = useCallback(() => setReady(true), []);
 
+  if (!webgl2) return <GlFallback reason="unsupported" />;
+
   return (
     <div className="app-root" ref={appRoot}>
+      {contextLost && <GlFallback reason="lost" />}
+      <p className="visually-hidden">
+        Interactive 3D solar system. Drag to orbit, scroll or pinch to zoom, and
+        use the body list, timeline and controls to explore. Space pauses time,
+        arrow keys scrub it, and Escape closes open panels.
+      </p>
       <Canvas
         dpr={dpr}
         gl={{
@@ -92,6 +105,12 @@ export default function App() {
         }}
         camera={{ fov: 55, near: 0.1, far: 1e7, position: [0, 220, 620] }}
         onCreated={({ gl }) => {
+          // Baked cube maps live in GPU memory and are not recoverable, so a
+          // lost context is a reload, not a resume.
+          gl.domElement.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            setContextLost(true);
+          });
           // Tone mapping happens inside the composer, after bloom. Doing it
           // here as well would crush the HDR range before it can bloom.
           gl.toneMapping =
