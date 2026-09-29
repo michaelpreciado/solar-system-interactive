@@ -162,9 +162,13 @@ test.describe('Orrery', () => {
       let structural = 0;
       const obs = new MutationObserver((records) => {
         for (const r of records) {
+          // Telemetry rewrites text nodes, which shows up as childList
+          // churn on the readout spans; only added/removed *elements* mean
+          // React re-rendered the tree, and text churn scales with fps.
+          const isEl = (n: Node) => n.nodeType === 1;
           if (
             r.type === 'childList' &&
-            (r.addedNodes.length || r.removedNodes.length)
+            ([...r.addedNodes].some(isEl) || [...r.removedNodes].some(isEl))
           ) {
             structural++;
           }
@@ -176,9 +180,7 @@ test.describe('Orrery', () => {
       return structural;
     });
 
-    // Telemetry rewrites text nodes at 10 Hz, which is a characterData change,
-    // not a childList one. Any structural churn here means React is committing
-    // inside the frame loop.
+    // Any element churn here means React is committing inside the frame loop.
     expect(mutations, 'no React commits during playback').toBeLessThan(5);
   });
 
